@@ -27,8 +27,8 @@ class MongoDB(object):
             except Exception as e:
                 count = count + 1
                 self.connecter = False
-                conn_result = str(e)
-                ##print("连接失败,连接了", count, "次")
+                print(e)
+                print("连接失败,连接了", count, "次")
             else:
                 if count >= 3:
                     break

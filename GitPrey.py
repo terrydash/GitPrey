@@ -23,7 +23,6 @@ import argparse
 
 from fake_useragent import UserAgent
 
-
 try:
     from config.Config import *
 except ImportError:
@@ -39,7 +38,7 @@ except ImportError:
 HOST_NAME = "https://github.com/"
 RAW_NAME = "https://raw.githubusercontent.com/"
 SCAN_DEEP = [10, 30, 50, 70, 100]  # Scanning deep according to page searching count and time out seconds
-SEARCH_LEVEL = 5  # Code searching level within 1-5, default is 1
+SEARCH_LEVEL = 2  # Code searching level within 1-5, default is 1
 MAX_PAGE_NUM = 100  # Maximum results of code searching
 MAX_RLT_PER_PAGE = 10  # Maximum results count of per page
 
@@ -354,7 +353,10 @@ def project_miner(key_words):
     # for p in total_project_list:
     #     info_print(p)
     for url in unique_project_url_list:
-        debug_print((HOST_NAME + url).replace("//", "/"))
+        github_url = (HOST_NAME + url).replace("//", "/")
+        debug_print(github_url)
+        db_u = {'github_url': github_url}
+        dbsession.insert_one(db_u)
     project_info_output = "\n[*] Found {num} public projects related to the key words.\n"
 
     info_print(project_info_output.format(num=len(total_project_list)))
@@ -382,7 +384,7 @@ if __name__ == "__main__":
     global dbsession
     for kw in kws:
         debug_print("开始搜索关键字:" + kw)
-        dbsession = BaseRepository(kw)
+        dbsession = BaseRepository(collectionname=kw)
         project_miner(kw)
         debug_print("开始搜索关键字:" + kw + " huawei")
         project_miner(kw + " huawei")
