@@ -12,11 +12,15 @@ init(autoreset=True)
 
 logger = logging.getLogger('')
 logger.setLevel(logging.INFO)
-file_handle = logging.FileHandler('GitPrey.log')
+file_handle = logging.FileHandler('GitPrey-info.log')
+file_handle2 = logging.FileHandler('GitPrey-debug.log')
 file_handle.setLevel(logging.INFO)
+file_handle2.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(message)s')
 file_handle.setFormatter(formatter)
+file_handle2.setFormatter(formatter)
 logger.addHandler(file_handle)
+logger.addHandler(file_handle2)
 
 
 def error_print(string):
@@ -29,6 +33,12 @@ def info_print(string):
     # Print information with green color
     print(Fore.GREEN + string)
     logger.info(string)
+
+
+def debug_print(string):
+    # Print information with green color
+    print(Fore.YELLOW + string)
+    logger.debug(string)
 
 
 def project_print(string):

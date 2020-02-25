@@ -35,9 +35,24 @@ except ImportError:
 HOST_NAME = "https://github.com/"
 RAW_NAME = "https://raw.githubusercontent.com/"
 SCAN_DEEP = [10, 30, 50, 70, 100]  # Scanning deep according to page searching count and time out seconds
-SEARCH_LEVEL = 1  # Code searching level within 1-5, default is 1
+SEARCH_LEVEL = 5  # Code searching level within 1-5, default is 1
 MAX_PAGE_NUM = 100  # Maximum results of code searching
 MAX_RLT_PER_PAGE = 10  # Maximum results count of per page
+
+
+def get_keywords():
+    """
+            Read file name pattern item from signature file
+            :param file_path: Pattern file path
+            :returns: Signature item list
+            """
+    item_list = []
+    with open("keywords.txt", 'r') as pattern_file:
+        item_line = pattern_file.readline()
+        while item_line:
+            item_list.append(item_line.strip())
+            item_line = pattern_file.readline()
+    return item_list
 
 
 class GitPrey(object):
@@ -72,7 +87,7 @@ class GitPrey(object):
         """
         unique_project_list = []
         self.__auto_login(USER_NAME, PASSWORD)
-        info_print('[*] Searching projects hard...')
+        # info_print('[*] Searching projects hard...')
 
         # Get unique project list of first page searched results
         total_progress = SCAN_DEEP[SEARCH_LEVEL - 1]
@@ -83,11 +98,12 @@ class GitPrey(object):
             sys.stdout.write(str(progress_point) + '%|' + '#' * progress_point + '|\r')
             sys.stdout.flush()
             # Search project in each page
-            code_url = self.search_url.format(page=1, keyword=query_string)
+            code_url = self.search_url.format(page=i+1, keyword=query_string)
+            # debug_print(code_url)
             page_html_parse = self.__get_page_html(code_url)
-            project_list = self.__page_project_list(page_html_parse)    # Project list of per result page
+            project_list = self.__page_project_list(page_html_parse)  # Project list of per result page
             page_project_num, project_list = len(project_list), list(set(project_list))
-            unique_project_list.extend(project_list)    # Extend unique project list of per page
+            unique_project_list.extend(project_list)  # Extend unique project list of per page
             if page_project_num < MAX_RLT_PER_PAGE:
                 break
             project = " -repo:" + " -repo:".join(project_list)
@@ -105,7 +121,7 @@ class GitPrey(object):
         :returns: Project list of per page
         """
         cur_par_html = BeautifulSoup(page_html, "lxml")
-        project_info = cur_par_html.select("a.text-bold")
+        project_info = cur_par_html.select("a.link-gray")
         page_project = [project.text for project in project_info]
         return page_project
 
@@ -123,8 +139,8 @@ class GitPrey(object):
             file_pattern = " filename:" + " filename:".join(file_sig_list)
             code_dic = {}
             # Most five AND/OR operators in search function.
-            for i in range(math.floor(len(info_sig_list)/5)+1):
-                project_pattern = info_sig_list[i*5:i*5+5]
+            for i in range(math.floor(len(info_sig_list) / 5) + 1):
+                project_pattern = info_sig_list[i * 5:i * 5 + 5]
                 repo_code_dic = self.__file_content_inspect(project_string, file_pattern, project_pattern)
                 code_dic.update(repo_code_dic)
             return code_dic
@@ -252,7 +268,8 @@ class GitPrey(object):
         :returns: Parsed html page
         """
         try:
-            page_html = requests.get(url, headers=self.headers, cookies=self.cookies, timeout=SCAN_DEEP[SEARCH_LEVEL - 1])
+            page_html = requests.get(url, headers=self.headers, cookies=self.cookies,
+                                     timeout=SCAN_DEEP[SEARCH_LEVEL - 1])
             if page_html.status_code == 429:
                 time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1])
                 self.__get_page_html(url)
@@ -298,7 +315,7 @@ def init():
     key_words = args.keywords if args.keywords else ""
 
     # Print GitPrey digital logo and version information.
-    info_print(GitPrey.__doc__)
+    #info_print(GitPrey.__doc__)
 
     if not is_keyword_valid(key_words):
         error_print("[!] Error: The key word you input is invalid. Please try again.")
@@ -319,8 +336,10 @@ def project_miner(key_words):
     # Search projects according to key words and searching level
     _gitprey = GitPrey(key_words)
     total_project_list = _gitprey.search_project()
-
+    for p in total_project_list:
+        info_print(p)
     project_info_output = "\n[*] Found {num} public projects related to the key words.\n"
+
     info_print(project_info_output.format(num=len(total_project_list)))
 
     # Join all projects to together to search
@@ -339,6 +358,10 @@ def project_miner(key_words):
 
 if __name__ == "__main__":
     # Initialize key words input.
-    key_words = init()
+    # key_words = init()
+
     # Search related projects depend on key words.
-    project_miner(key_words)
+    kws = get_keywords()
+    for kw in kws:
+        debug_print(kw)
+        project_miner(kw)
