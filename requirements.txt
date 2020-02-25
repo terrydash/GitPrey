@@ -4,3 +4,4 @@ beautifulsoup4
 colorama
 pymongo
 fake_useragent
+retrying

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from dao.BaseRepository import BaseRepository
 
 try:
     import requests
@@ -22,6 +23,7 @@ import argparse
 
 from fake_useragent import UserAgent
 
+
 try:
     from config.Config import *
 except ImportError:
@@ -37,7 +39,7 @@ except ImportError:
 HOST_NAME = "https://github.com/"
 RAW_NAME = "https://raw.githubusercontent.com/"
 SCAN_DEEP = [10, 30, 50, 70, 100]  # Scanning deep according to page searching count and time out seconds
-SEARCH_LEVEL = 1  # Code searching level within 1-5, default is 1
+SEARCH_LEVEL = 5  # Code searching level within 1-5, default is 1
 MAX_PAGE_NUM = 100  # Maximum results of code searching
 MAX_RLT_PER_PAGE = 10  # Maximum results count of per page
 
@@ -102,8 +104,8 @@ class GitPrey(object):
             sys.stdout.write(str(progress_point) + '%|' + '#' * progress_point + '|\r')
             sys.stdout.flush()
             # Search project in each page
-            code_url = self.search_url.format(page=i + 1, keyword=query_string)
-
+            code_url = self.search_url.format(page=1, keyword=query_string)
+            debug_print(code_url)
             page_html_parse = self.__get_page_html(code_url)
             project_list, page_url = self.__page_project_list(page_html_parse)  # Project list of per result page
             page_project_num, project_list, project_url = len(project_list), list(set(project_list)), list(
@@ -377,8 +379,10 @@ if __name__ == "__main__":
 
     # Search related projects depend on key words.
     kws = get_keywords()
+    global dbsession
     for kw in kws:
         debug_print("开始搜索关键字:" + kw)
+        dbsession = BaseRepository(kw)
         project_miner(kw)
         debug_print("开始搜索关键字:" + kw + " huawei")
         project_miner(kw + " huawei")

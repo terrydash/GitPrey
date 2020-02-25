@@ -11,7 +11,7 @@ import logging
 init(autoreset=True)
 
 logger = logging.getLogger('')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 file_handle = logging.FileHandler('GitPrey-info.log')
 file_handle2 = logging.FileHandler('GitPrey-debug.log')
 file_handle.setLevel(logging.INFO)
