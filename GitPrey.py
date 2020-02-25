@@ -20,6 +20,8 @@ import time
 import importlib.util
 import argparse
 
+from fake_useragent import UserAgent
+
 try:
     from config.Config import *
 except ImportError:
@@ -35,7 +37,7 @@ except ImportError:
 HOST_NAME = "https://github.com/"
 RAW_NAME = "https://raw.githubusercontent.com/"
 SCAN_DEEP = [10, 30, 50, 70, 100]  # Scanning deep according to page searching count and time out seconds
-SEARCH_LEVEL = 5  # Code searching level within 1-5, default is 1
+SEARCH_LEVEL = 1  # Code searching level within 1-5, default is 1
 MAX_PAGE_NUM = 100  # Maximum results of code searching
 MAX_RLT_PER_PAGE = 10  # Maximum results count of per page
 
@@ -77,7 +79,7 @@ class GitPrey(object):
         self.keyword = keyword
         self.search_url = "https://github.com/search?o=desc&p={page}&q={keyword}&ref=searchresults&s=indexed&type=Code&utf8=%E2%9C%93"
         self.headers = {
-            'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.36"}
+            'User-Agent': UserAgent().random}
         self.cookies = ""
 
     def search_project(self):
@@ -86,6 +88,7 @@ class GitPrey(object):
         :returns: Related projects list
         """
         unique_project_list = []
+        unique_project_url_list = []
         self.__auto_login(USER_NAME, PASSWORD)
         # info_print('[*] Searching projects hard...')
 
@@ -93,25 +96,29 @@ class GitPrey(object):
         total_progress = SCAN_DEEP[SEARCH_LEVEL - 1]
         query_string = self.keyword + " in:file,path"
         for i in range(total_progress):
+            print("开始搜索第{}页".format(i + 1))
             # Print process of searching project
             progress_point = int((i + 1) * (100 / total_progress))
             sys.stdout.write(str(progress_point) + '%|' + '#' * progress_point + '|\r')
             sys.stdout.flush()
             # Search project in each page
-            code_url = self.search_url.format(page=i+1, keyword=query_string)
-            # debug_print(code_url)
+            code_url = self.search_url.format(page=i + 1, keyword=query_string)
+
             page_html_parse = self.__get_page_html(code_url)
-            project_list = self.__page_project_list(page_html_parse)  # Project list of per result page
-            page_project_num, project_list = len(project_list), list(set(project_list))
+            project_list, page_url = self.__page_project_list(page_html_parse)  # Project list of per result page
+            page_project_num, project_list, project_url = len(project_list), list(set(project_list)), list(
+                set(page_url))
+
             unique_project_list.extend(project_list)  # Extend unique project list of per page
+            unique_project_url_list.extend(project_url)
             if page_project_num < MAX_RLT_PER_PAGE:
                 break
-            project = " -repo:" + " -repo:".join(project_list)
+            project = " -repo:" + " -repo:".join([str(p).strip() for p in project_list])
             query_string += project
         # Deal with last progress bar stdout
         sys.stdout.write('100%|' + '#' * 100 + '|\r')
         sys.stdout.flush()
-        return unique_project_list
+        return unique_project_list, unique_project_url_list
 
     @staticmethod
     def __page_project_list(page_html):
@@ -120,10 +127,14 @@ class GitPrey(object):
         :param page_html: Html page content
         :returns: Project list of per page
         """
+        page_project = []
+        page_url = []
         cur_par_html = BeautifulSoup(page_html, "lxml")
         project_info = cur_par_html.select("a.link-gray")
-        page_project = [project.text for project in project_info]
-        return page_project
+        for project in project_info:
+            page_project.append(project.text)
+            page_url.append(project.get("href", ""))
+        return page_project, page_url
 
     def sensitive_info_query(self, project_string, mode):
         """
@@ -268,9 +279,11 @@ class GitPrey(object):
         :returns: Parsed html page
         """
         try:
+            self.headers = {'User-Agent': UserAgent().random}
             page_html = requests.get(url, headers=self.headers, cookies=self.cookies,
                                      timeout=SCAN_DEEP[SEARCH_LEVEL - 1])
             if page_html.status_code == 429:
+                print("发生429,过于频繁,暂停{}秒".format(SCAN_DEEP[SEARCH_LEVEL - 1]))
                 time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1])
                 self.__get_page_html(url)
             return page_html.text
@@ -315,7 +328,7 @@ def init():
     key_words = args.keywords if args.keywords else ""
 
     # Print GitPrey digital logo and version information.
-    #info_print(GitPrey.__doc__)
+    info_print(GitPrey.__doc__)
 
     if not is_keyword_valid(key_words):
         error_print("[!] Error: The key word you input is invalid. Please try again.")
@@ -335,16 +348,18 @@ def project_miner(key_words):
     """
     # Search projects according to key words and searching level
     _gitprey = GitPrey(key_words)
-    total_project_list = _gitprey.search_project()
-    for p in total_project_list:
-        info_print(p)
+    total_project_list, unique_project_url_list = _gitprey.search_project()
+    # for p in total_project_list:
+    #     info_print(p)
+    for url in unique_project_url_list:
+        debug_print((HOST_NAME + url).replace("//", "/"))
     project_info_output = "\n[*] Found {num} public projects related to the key words.\n"
 
     info_print(project_info_output.format(num=len(total_project_list)))
 
     # Join all projects to together to search
-    repo_string = " repo:" + " repo:".join(total_project_list)
-
+    repo_string = " repo:" + " repo:".join([str(p).strip() for p in total_project_list])
+    debug_print(repo_string)
     # Scan all projects with pattern filename
     info_print("[*] Begin searching sensitive file.")
     _gitprey.sensitive_info_query(repo_string, "filename")
@@ -363,5 +378,7 @@ if __name__ == "__main__":
     # Search related projects depend on key words.
     kws = get_keywords()
     for kw in kws:
-        debug_print(kw)
+        debug_print("开始搜索关键字:" + kw)
         project_miner(kw)
+        debug_print("开始搜索关键字:" + kw + " huawei")
+        project_miner(kw + " huawei")
