@@ -42,9 +42,12 @@ except ImportError:
 HOST_NAME = "https://github.com/"
 RAW_NAME = "https://raw.githubusercontent.com/"
 SCAN_DEEP = [10, 30, 50, 70, 100]  # Scanning deep according to page searching count and time out seconds
-SEARCH_LEVEL = 1  # Code searching level within 1-5, default is 1
+SEARCH_LEVEL = 5  # Code searching level within 1-5, default is 1
 MAX_PAGE_NUM = 100  # Maximum results of code searching
 MAX_RLT_PER_PAGE = 10  # Maximum results count of per page
+
+
+# 连接错误计数
 
 
 def get_template_file():
@@ -72,6 +75,14 @@ def get_file(filename):
     return item_list
 
 
+def html_to_plain_text(h):
+    text = re.sub('<head.*?>.*?</head>', '', h, flags=re.M | re.S | re.I)
+    text = re.sub('<a\s.*?>', '', text, flags=re.M | re.S | re.I)
+    text = re.sub('<.*?>', '', text, flags=re.M | re.S)
+    text = re.sub(r'(\s*\n)+', '\n', text, flags=re.M | re.S)
+    return html.unescape(text)
+
+
 class GitPrey(object):
 
     def __init__(self, keyword):
@@ -80,6 +91,7 @@ class GitPrey(object):
         self.headers = {
             'User-Agent': UserAgent().random}
         self.cookies = ""
+        self.CONN_ERR_NUM = 0
 
     def search_repos(self):
         unique_project_list = []
@@ -102,6 +114,8 @@ class GitPrey(object):
             page_html_parse = self.__get_page_html(code_url)
             project_list, h = self.__page_project_info_list(page_html_parse, i,
                                                             self.keyword)  # Project list of per result page
+            if len(project_list)<=0:
+                break
             c += h
         # Deal with last progress bar stdout
         sys.stdout.write('100%|' + '#' * 100 + '|\r')
@@ -193,7 +207,9 @@ class GitPrey(object):
                 p["blob_num"] = int(str(blob_num.text).strip())
                 p["blob_num_url"] = HOST_NAME[0:-1] + blob_num.get("href", "")
                 p["blob_html"] = html.unescape(str(blob_html))
-                h += "<h3>第<span style='color:red'>{}</span>页,第<span style='color:red'>{}</span>个项目</h3>".format(i + 1,num)
+                p["pure_code"] = html_to_plain_text(p["blob_html"])
+                h += "<h3>#<span style='color:red'>{}</span>,第<span style='color:red'>{}</span>页,第<span style='color:red'>{}</span>个项目</h3>".format(
+                    i * 10 + num, i + 1, num)
                 p["keyword"] = kw
                 num += 1
                 h += (html.unescape(str(project))).replace('href="/', 'href="https://github.com/').replace("<a ",
@@ -201,7 +217,7 @@ class GitPrey(object):
                 _, n, _ = dbsession.search_no_page(
                     {'repo_name': p['repo_name'], 'file_name': p['file_name'], 'blob_num': p['blob_num']})
                 if n <= 0:
-                    info_print("插入数据库:{}".format(str(p)))
+                    print("插入数据库:{}".format(str(p)))
                     dbsession.insert_one(p)
 
         return ps, h
@@ -352,20 +368,30 @@ class GitPrey(object):
         try:
             self.headers = {'User-Agent': UserAgent().random}
             page_html = requests.get(url, headers=self.headers, cookies=self.cookies,
-                                     timeout=SCAN_DEEP[SEARCH_LEVEL - 1])
+                                     timeout=SCAN_DEEP[SEARCH_LEVEL - 1]/3)
             if page_html.status_code == 429:
-                print("发生429,过于频繁,暂停{}秒".format(SCAN_DEEP[SEARCH_LEVEL - 1]))
-                time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1])
+                print("发生429,过于频繁,暂停{}秒".format(SCAN_DEEP[SEARCH_LEVEL - 1]/3))
+                time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1]/3)
                 self.__get_page_html(url)
+            self.CONN_ERR_NUM = 0
             return page_html.text
         except requests.ConnectionError as e:
+            self.CONN_ERR_NUM += 1
             error_print("连接错误！")
-            time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1])
-            self.__get_page_html(url)
+            time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1]/3)
+            if self.CONN_ERR_NUM >= 10:
+                error_print("错误达到10次！")
+                return ""
+            return self.__get_page_html(url)
+
         except requests.ReadTimeout:
+            self.CONN_ERR_NUM += 1
             error_print("连接超时！")
-            time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1])
-            self.__get_page_html(url)
+            time.sleep(SCAN_DEEP[SEARCH_LEVEL - 1]/3)
+            if self.CONN_ERR_NUM >= 10:
+                error_print("错误达到10次！")
+                return ""
+            return self.__get_page_html(url)
 
 
 def is_keyword_valid(keyword):
