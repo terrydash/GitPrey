@@ -5,3 +5,4 @@ colorama
 pymongo
 fake_useragent
 retrying
+flask
